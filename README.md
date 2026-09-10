@@ -41,14 +41,6 @@ python -m pip install -r requirements.txt
 
 GPU users can install the corresponding CUDA build; `requirements.txt` does not need to change.
 
-## Running directly in PyCharm
-
-Every entry-point script is set up so that you can **right-click → Run** in PyCharm without filling in arguments manually:
-
-1. The script prepends the project root to `sys.path`, so `from Dataset...`, `from Features...`, and `from Model...` all import correctly;
-2. Default arguments are absolute paths based on the project root and do not depend on PyCharm's working directory.
-
-Each entry-point script contains a `default_checkpoint()` or `default_paths()` function with two branches: "model trained by yourself" and "paper pretrained model". **The self-trained branch is enabled by default.** To switch, uncomment the corresponding `return`.
 
 ## First run the demo
 

@@ -40,14 +40,6 @@ python -m pip install -r requirements.txt
 
 GPU 用户安装对应的 CUDA 版本即可，`requirements.txt` 不用改。
 
-## 在 PyCharm 里直接运行
-
-所有入口脚本都做了两件事，使它们在 PyCharm 里可以**直接右键 Run**，不需要在 Run Configuration 里手动填参数：
-
-1. 脚本顶部会把项目根目录加入 `sys.path`，所以 `from Dataset...`、`from Features...`、`from Model...` 都能正常导入；
-2. 默认参数基于项目根目录的绝对路径，和 PyCharm 的 working directory 无关。
-
-每个入口脚本里都有一段 `default_checkpoint()` 或 `default_paths()` 函数，把「自己训练的模型」和「论文预训练模型」两个分支都写好了，**当前默认启用自己训练的分支**。需要切换时，把对应的 `return` 取消注释即可。
 
 ## 先跑通演示
 

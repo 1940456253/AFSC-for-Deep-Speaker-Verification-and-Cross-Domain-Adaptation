@@ -1,4 +1,6 @@
-## AFSC + ECAPA 第一部分公开代码
+# AFSC + ECAPA 第一部分公开代码
+
+[English](README.md) | **中文** | [日本語](README.ja.md)
 
 这个项目覆盖论文第一部分的 AFSC 特征、ECAPA 训练、嵌入提取和说话人验证，保留 MFCC、FBank 对照。没有加入跨域适应，也没有加入 Res2Net 或 X-Vector。代码可以重新训练，也支持加载论文提供的 CN-Celeb2 预训练模型。
 

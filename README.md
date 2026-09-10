@@ -1,157 +1,249 @@
-# AFSC + ECAPA-TDNN: training and speaker verification
 
-A standalone implementation of the first part of **Adaptive Frequency Spectral Coefficients for Deep Speaker Verification: Training and Cross-Domain Adaptation**.
+# AFSC + ECAPA Part 1 Public Code
 
-This release provides the AFSC front end and an ECAPA-TDNN training, embedding extraction and evaluation pipeline. MFCC and FBank can be selected as baselines with the same encoder. Res2Net, X-Vector and target-domain adaptation are outside this release's scope. The repository does not redistribute research datasets or pretrained research checkpoints, and does not claim to reproduce an unidentified historical checkpoint or all numerical results in the manuscript.
+This project covers the first part of the paper: AFSC features, ECAPA training, embedding extraction, and speaker verification, with MFCC and FBank baselines. Cross-domain adaptation is not included, and neither Res2Net nor X-Vector is included. The code can be retrained and can also load the CN-Celeb2 pretrained model provided with the paper.
+
+The project supports two workflows:
+
+- **Train your own model**: start from `Speech_example/` or your own dataset and train AFSC + ECAPA with `Model/train.py`;
+- **Load the pretrained model**: convert the paper-provided `embedding_model.ckpt` + `classifier.ckpt` into this project's checkpoint format with `tools/convert_legacy.py`, then extract, score, and compare directly.
+
+Both workflows share the same `Inference/`, `Evaluation/`, and `Features/` scripts.
 
 ## Main directories
 
+| Directory | Main files | Purpose |
+|---|---|---|
+| Dataset | data.py, prepare.py, demo.py | Audio loading, training manifest preparation, demo data generation from speaker folders |
+| Features | spectrum.py, afsc.py, frontend.py, export.py | Power spectrum and three acoustic features, learned filter export |
+| Model | ecapa_tdnn.py, system.py, train.py | ECAPA, classification loss, two-stage training and resume |
+| Evaluation | metrics.py, score.py, test_pipeline.py, smoke_test.py | Scoring, EER/MinDCF, validation code |
+| Inference | extract.py, verify.py | Embedding extraction, two-waveform comparison |
+
+Additional directories:
+
 | Directory | Contents |
 |---|---|
-| `Dataset` | Audio/CSV loading, wav.scp + utt2spk conversion, synthetic demo generator |
-| `Features` | Power spectrum, MFCC/FBank, trainable AFSC and filter export |
-| `Model` | ECAPA, cosine classifier, angular-margin loss, two-stage training and YAML recipes |
-| `Evaluation` | Trial scoring, EER/MinDCF, unit and integration tests |
-| `Inference` | Checkpoint loading, utterance embeddings and two-waveform comparison |
+| `Speech_example/` | Example audio. Each subfolder is one speaker, with 15 utterances per folder |
+| `PreTrained/` | Paper-provided pretrained checkpoints (`embedding_model.ckpt` + `classifier.ckpt`) and the converted `cn_celeb2_afsc_ecapa.pt` |
+| `tools/` | Utility scripts, including `convert_legacy.py` and `inspect_ckpt.py` |
 
-All commands below run **from this repository's root directory**. On Windows the same `python -m ...` commands work; use `num_workers: 0` if multiprocessing is inconvenient. No installation of `speakerlab`, Kaldi binaries, or `kaldiio` is needed. Torchaudio's Kaldi-compatible Python functions are used for the fixed front ends.
+Training code lives under Model, so no sixth Training directory is added. All commands are run from the project root.
 
 ## Installation
 
-Use Python 3.10–3.12. The included validation was run with Python 3.12 on CPU.
-
-```bash
-python -m venv .venv
-```
-
-Activate with `source .venv/bin/activate` on Linux/macOS or `.venv\Scripts\activate` on Windows cmd. Install matching PyTorch and torchaudio builds. For CPU:
+Use Python 3.10–3.12. Install matching PyTorch and torchaudio 2.5.1 first, then install requirements.txt. CPU example:
 
 ```bash
 python -m pip install torch==2.5.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cpu
 python -m pip install -r requirements.txt
 ```
 
-For an NVIDIA GPU, install a compatible matching PyTorch/torchaudio 2.5.1 build for the machine, then install `requirements.txt`. The reference model is large; use the demo recipe for a quick CPU check.
+GPU users can install the corresponding CUDA build; `requirements.txt` does not need to change.
 
-## Quick end-to-end example
+## Running directly in PyCharm
 
-Generate artificial tones and small train/evaluation manifests:
+Every entry-point script is set up so that you can **right-click → Run** in PyCharm without filling in arguments manually:
+
+1. The script prepends the project root to `sys.path`, so `from Dataset...`, `from Features...`, and `from Model...` all import correctly;
+2. Default arguments are absolute paths based on the project root and do not depend on PyCharm's working directory.
+
+Each entry-point script contains a `default_checkpoint()` or `default_paths()` function with two branches: "model trained by yourself" and "paper pretrained model". **The self-trained branch is enabled by default.** To switch, uncomment the corresponding `return`.
+
+## First run the demo
+
+Generate manifests from `Speech_example/`:
 
 ```bash
-python -m Dataset.demo --output demo_data
+python -m Dataset.demo
+```
+
+Expected output:
+
+```
+Train:  30 utterances from 3 speakers
+Eval:   15 utterances from 3 speakers
+Trials: 105 (30 target, 75 nontarget)
+Manifests written to .../demo_data
+```
+
+Generated files under `demo_data/`:
+
+| File | Contents |
+|---|---|
+| `train.csv` | Training manifest, each line `ID,path,spk` |
+| `eval.csv` | Evaluation manifest, each line `ID,path,spk` |
+| `trials.txt` | Evaluation trials, each line `enrol_id test_id label` |
+
+By default, 5 utterances per speaker are held out for evaluation and the rest are used for training. You can change this:
+
+```bash
+python -m Dataset.demo --eval-per-speaker 3
+```
+
+## Full self-training workflow
+
+Right-click Run the following files in order in PyCharm, or run them from the command line with `python -m ...`.
+
+### 1. Train
+
+```bash
 python -m Model.train --config Model/demo.yaml --train-csv demo_data/train.csv --output runs/demo --device cpu
+```
+
+`Model/demo.yaml` is a small CPU-friendly model; `Model/config.yaml` is the paper configuration (2+8 epochs, `channels=[1024,1024,1024,1024,3072]`, 192-d embeddings) and should be used for formal experiments.
+
+Training outputs under `runs/demo/`:
+
+| File | Contents |
+|---|---|
+| `config.yaml` | Full configuration used for this run |
+| `speakers.json` | Speaker → index mapping |
+| `train.jsonl` | Per-epoch loss / accuracy / lr / margin |
+| `epoch_XXX.pt` | Full checkpoint for each epoch |
+| `last.pt` | Copy of the final epoch |
+| `frequency_points_XXX.json` | AFSC frequency points for each epoch |
+
+### 2. Extract evaluation embeddings
+
+```bash
 python -m Inference.extract --checkpoint runs/demo/last.pt --csv demo_data/eval.csv --output runs/demo/embeddings.npz --device cpu
+```
+
+Outputs:
+
+- `runs/demo/embeddings.npz`: contains `ids` (string array) and `embeddings` (N × D)
+- `runs/demo/embeddings.json`: metadata recording checkpoint, csv, feature, utterances, chunk_seconds
+
+### 3. Score
+
+```bash
 python -m Evaluation.score --enrol runs/demo/embeddings.npz --trials demo_data/trials.txt --output runs/demo/scores
+```
+
+Outputs:
+
+- `runs/demo/scores/scores.csv`: enrol_id, test_id, label, score for every trial
+- `runs/demo/scores/metrics.json`: EER, MinDCF, trial counts
+
+EER is expressed as a percentage, MinDCF as a normalized ratio, and the default target prior is `0.01`.
+
+### 4. Export filters (optional)
+
+```bash
 python -m Features.export --checkpoint runs/demo/last.pt --output runs/demo/filters --plot
 ```
 
-**The demo uses synthetic tones and a reduced ECAPA. Its scores are software checks, not speaker-verification research results.** Its train and evaluation synthetic identities are disjoint. No real person's speech is included.
+Outputs:
 
-## Prepare research data
+- `runs/demo/filters/afsc_filters.npz`: contains `bin_points` (82,), `hz` (82,), `filters` (80, 257)
+- `runs/demo/filters/afsc_filters.png` (when `--plot` is given)
 
-Obtain the datasets from their providers. Supply separate training and evaluation manifests using the intended dataset protocol. No automatic random train/test split or randomly generated research trials is performed. Avoid training/evaluation speaker leakage and choose any hyperparameters or operating threshold on separate development data.
+### 5. Compare two waveforms (optional)
 
-`wav.scp` format (one utterance per line):
-
-```text
-utt001 /path/to/audio001.wav
-utt002 /path/to/audio002.flac
+```bash
+python -m Inference.verify --checkpoint runs/demo/last.pt --enrol Speech_example/speech_demo1/speech-01-001.flac --test Speech_example/speech_demo1/speech-01-002.flac
 ```
 
-Paths with spaces are supported. Relative paths are resolved relative to `wav.scp`. Shell pipelines such as `sox ... |` are not supported. `utt2spk` contains:
+If `--enrol` / `--test` are omitted, the first two files under `Speech_example/speech_demo1/` are used by default. `--threshold` must be calibrated on a development set; there is no universal default.
 
-```text
-utt001 speaker001
-utt002 speaker002
+## Loading the pretrained model
+
+The paper authors provide CN-Celeb2-trained AFSC + ECAPA weights:
+
+```
+PreTrained/embedding_model.ckpt    # AFSC + ECAPA weights
+PreTrained/classifier.ckpt         # 2793 × 192 classification head
 ```
 
-Create a training CSV:
+These are legacy format and must be converted to this project's `format_version: 1` with `tools/convert_legacy.py`:
+
+```bash
+python tools/convert_legacy.py
+```
+
+The conversion script will:
+
+1. rename the `afsc.*` prefix to `frontend.*`;
+2. rename the `ecapa.*` prefix to `encoder.*`;
+3. validate that every key matches `SpeakerSystem`;
+4. write `PreTrained/cn_celeb2_afsc_ecapa.pt` and `PreTrained/cn_celeb2_afsc_ecapa.json`.
+
+If you see `All keys matched exactly.`, the conversion succeeded completely.
+
+### Extract and score with the pretrained model
+
+To switch: open `Inference/extract.py`, `Evaluation/score.py`, `Features/export.py`, and `Inference/verify.py`, comment out block (A) in `default_checkpoint()` (or `default_paths()`), and uncomment block (B).
+
+Then use the same commands as for self-training:
+
+```bash
+python -m Inference.extract --checkpoint PreTrained/cn_celeb2_afsc_ecapa.pt --csv demo_data/eval.csv --output runs/pretrained_eval.npz --device cpu
+python -m Evaluation.score --enrol runs/pretrained_eval.npz --trials demo_data/trials.txt --output runs/pretrained_scores
+python -m Features.export --checkpoint PreTrained/cn_celeb2_afsc_ecapa.pt --output runs/pretrained_filters --plot
+```
+
+### Notes on the pretrained model
+
+- The 3 speakers in `Speech_example/` are **not** among the 2793 CN-Celeb2 speakers. The pretrained model has never seen them, so EER on this demo may be high; this is expected.
+- Meaningful evaluation requires the official CN-Celeb2 or SITW evaluation protocol and trial lists.
+- The pretrained model was trained with the AFSC front end, so it can only be used with `feature: afsc`.
+- The speaker mapping saved in the checkpoint is a placeholder (`speaker_00000`…`speaker_02792`); it only affects mapping classification outputs back to real speaker names.
+
+## Switching to real data
+
+Prepare 16 kHz audio plus the training wav.scp and utt2spk. Each line of wav.scp is "audio ID path"; each line of utt2spk is "audio ID speaker ID". Audio files are not copied into the repository.
 
 ```bash
 python -m Dataset.prepare --wav-scp /data/train/wav.scp --utt2spk /data/train/utt2spk --output /data/train/train.csv
-```
-
-Create an evaluation CSV (speaker labels are optional):
-
-```bash
-python -m Dataset.prepare --wav-scp /data/eval/wav.scp --output /data/eval/eval.csv
-```
-
-CSV columns are `ID,path,spk,dur`; only `ID,path` are required for extraction and `spk` is additionally required for training. Relative CSV paths resolve beside the CSV. Audio must already be **16 kHz**; channel zero is used for multichannel audio. Each training row yields one random 3-second crop, with short recordings right-zero-padded. The default converter emits one row per utterance. Optional `start,stop` CSV fields, measured in seconds, are honored before random cropping. The converter does not generate these fields.
-
-Supply evaluation trials as:
-
-```text
-utt001 utt002 0
-utt001 utt003 1
-```
-
-Labels can be `0`/`1` or `nontarget`/`target`. All IDs must occur in the corresponding embedding archives. One ID denotes one utterance embedding; multi-utterance enrollment aggregation, VAD and score normalization are not implicit. If your dataset protocol requires enrollment aggregation or preprocessing, implement and document that protocol before evaluation.
-
-## Train AFSC + ECAPA
-
-```bash
 python -m Model.train --config Model/config.yaml --train-csv /data/train/train.csv --output runs/afsc --device cuda
 ```
 
-The default encoder has channels `[1024,1024,1024,1024,3072]`, 80 input feature channels and 192 output dimensions. Training uses a normalized cosine classifier and angular-margin loss (`scale=32`, `margin=0.3`). AFSC gap parameters train jointly for 2 epochs with a 30x learning-rate multiplier and zero weight decay, then remain frozen for 8 epochs. SGD momentum is reset at the stage transition by default, matching the supplied script's optimizer rebuild. Set `reset_optimizer_at_freeze: false` to retain the optimizer state instead.
+If you have no GPU, `--device cpu` works but training the full model is very slow. On Windows, set `num_workers` to 0 in the YAML if multiprocessing is problematic.
 
-MFCC and FBank use the same total epoch count and do not optimize AFSC parameters:
-
-```bash
-python -m Model.train --config Model/config.yaml --feature fbank --train-csv /data/train/train.csv --output runs/fbank --device cuda
-python -m Model.train --config Model/config.yaml --feature mfcc --train-csv /data/train/train.csv --output runs/mfcc --device cuda
-```
-
-Outputs: `config.yaml`, `speakers.json`, per-epoch `train.jsonl`, `epoch_001.pt` etc., `last.pt`, and per-epoch AFSC frequency-point JSON. All weights and AFSC buffers needed for extraction are in each checkpoint. Full checkpoints also contain classifier/optimizer state, the resolved manifest and RNG states; they therefore contain local training paths. Review those paths before publishing a checkpoint.
-
-Resume at the **next epoch**:
+Extracting a test set does not require speaker labels:
 
 ```bash
-python -m Model.train --config Model/config.yaml --train-csv /data/train/train.csv --output runs/afsc --resume runs/afsc/last.pt --device cuda
-```
-
-Use the identical recipe, feature override (if any), and manifest. `--stop-after-epoch 2` cleanly stops at an epoch boundary without changing the full learning-rate schedule. Mid-epoch resume is not implemented. Resuming an older checkpoint in a directory with newer results should use a new output directory. CPU epoch-boundary resume is tested for exact equality on the tiny recipe; exact equality across hardware/CUDA environments is not guaranteed.
-
-## Extract and evaluate
-
-```bash
+python -m Dataset.prepare --wav-scp /data/eval/wav.scp --output /data/eval/eval.csv
 python -m Inference.extract --checkpoint runs/afsc/last.pt --csv /data/eval/eval.csv --output runs/afsc/eval.npz --device cuda
 python -m Evaluation.score --enrol runs/afsc/eval.npz --trials /data/eval/trials --output runs/afsc/scores
 ```
 
-For separate enrollment/test archives, add `--test runs/afsc/test.npz` to scoring. Extraction defaults to the entire utterance. Clips shorter than 0.1 seconds are zero-padded for encoder compatibility. Optional `--chunk-seconds 30` uses 30-second nonoverlapping chunks; a remaining tail of at least 2 seconds adds an end-aligned chunk. Raw chunk embeddings are averaged, then L2-normalized once. This optional long-audio path does not perform target-domain adaptation.
+Each line of trials is "enrol audio ID test audio ID label", with 1 for same speaker and 0 for different speaker. Use splits and trials consistent with the actual dataset protocol. The code does not guess the CN-Celeb enrolment aggregation scheme or generate random research trials that replace the official protocol.
 
-Embeddings are stored as NPZ arrays `ids` (strings) and `embeddings` (N x D), loaded without pickle. Scoring writes `scores.csv` and `metrics.json`. EER is expressed as a **percentage**, MinDCF as a normalized ratio. Default DCF parameters are `p_target=0.01, c_miss=1, c_fa=1`. Metrics are computed from unrounded scores and equal scores are grouped into a single operating point.
+Add `--feature fbank` or `--feature mfcc` to the training command to switch baselines, and change the output directory at the same time. Extraction reads the feature type from the checkpoint automatically, so no re-specification is needed.
 
-Two-waveform inference:
+## Differences from the original code
+
+- `Model/config.yaml`: paper configuration. 2+8 epochs, constant margin 0.3, `channels=[1024,1024,1024,1024,3072]`, 192-d embeddings.
+- `Model/legacy_schedule.yaml`: schedule option corresponding to the historical log. 2+10 epochs, margin ramp from 0 to 0.3, learning rate reaching minimum at the end of epoch 10. It expresses a training schedule only and does not prove correspondence to any paper result.
+- `Model/demo.yaml`: reduced model for quick CPU validation.
+- AFSC preserves the original initialization reference array, positive-gap normalization, and filter formula. Its precise bounds are approximately 20.039–7614.844 Hz, and the first actual output points are affected by normalization. It was not silently replaced with a new "exact 20–7600 Hz initialization".
+- The new CSV uses one row per utterance by default, with a random 3-second crop at training time. When the user explicitly provides start/stop, that segment is read first and then cropped. The old "multiple CSV rows but training ignores segment offsets" behavior is not retained.
+- The new trainer saves full state for resumption and uses a new checkpoint format. Legacy `embedding_model.ckpt` cannot be loaded directly and must be converted with `tools/convert_legacy.py`.
+- Scoring explicitly handles tied scores and ROC endpoints, so it may differ slightly from the old metric function when scores are equal.
+
+## Resume and inspect results
 
 ```bash
-python -m Inference.verify --checkpoint runs/afsc/last.pt --enrol /data/a.wav --test /data/b.wav --device cpu
+python -m Model.train --config Model/config.yaml --train-csv /data/train/train.csv --output runs/afsc --resume runs/afsc/last.pt --device cuda
+python -m Features.export --checkpoint runs/afsc/last.pt --output runs/afsc/filters --plot
 ```
 
-This returns a cosine score. Add `--threshold VALUE` only after calibrating a threshold on appropriate development trials; there is no universal default threshold.
+Training output includes per-epoch logs, configuration, speaker indices, full checkpoints, and frequency points. Resume starts at the next epoch; mid-epoch resume is not supported. Full checkpoints contain data manifest paths, so review those paths before publishing a model.
 
-## AFSC details and differences from the original working scripts
-
-- Temporal preprocessing preserves the supplied spectrum extractor: 25 ms frames, 10 ms shift, frame DC removal, 0.97 pre-emphasis, Povey window, 512-point FFT and 257 power bins. Power is not divided by FFT size. AFSC has log compression and per-channel temporal mean subtraction, no DCT or discrete filter-sum normalization.
-- `Features/afsc.py` preserves the **legacy 82-entry reference sequence and its normalized positive-gap parameterization**. It has 80 trainable gap parameters; cumulative normalization produces a repeated upper endpoint. The initial forward-pass points differ from the raw reference list. Its bounds are approximately 20.039–7614.844 Hz, rather than exactly 20–7600 Hz. This is documented rather than silently changing the supplied method. Float32 rounding can produce nearly coincident points. No minimum gap is imposed.
-- Piecewise filter denominators are squared widths plus `1e-12`. Branches need not join continuously. Filters with no FFT support give constant floored log energy and zero mean-normalized channels.
-- MFCC/FBank use torchaudio 2.5.1 Kaldi defaults plus explicitly selected 80 channels, dither=0 and mean subtraction. MFCC uses 80 Mel bins and 80 cepstra, including the default cepstral lifter. Their default frequency bounds are 20–8000 Hz. Thus the front ends do not differ in filter shape alone.
-- The public default follows the manuscript's **2+8 epochs and constant margin 0.3**. The supplied historical log ran **2+10 epochs with a margin ramp from 0 to 0.3**. `Model/legacy_schedule.yaml` exposes that schedule, including an LR decay horizon of 10 epochs; it is not a promise of recovering a historical score. No source data list or scoring checkpoint was identified.
-- The new data converter uses one row per utterance. The old fixed-chunk CSV could repeat paths while its training reader ignored segment offsets. Here explicit segment offsets are honored. This can change per-epoch sampling relative to old CSV files.
-- Training/classifier/checkpoint wiring is rewritten as standalone PyTorch. Legacy `embedding_model.ckpt` files cannot be loaded directly; train with this release. The ECAPA encoder source is retained. Fixed-feature temporal preprocessing is retained from the supplied processor.
-- EER/MinDCF use tie-aware thresholds and include endpoint operating points. This is more robust for equal scores than the supplied sequential-score implementation and can differ on ties. No change is made to scoring to force agreement with a reported number.
-
-## Tests
+## Validation
 
 ```bash
 python -m unittest Evaluation.test_pipeline -v
 python -m Evaluation.smoke_test
 ```
 
-The smoke test creates temporary synthetic audio, trains a small model, tests freezing and exact epoch resume, extracts/compares embeddings, scores trials, exports filters, and exercises MFCC/FBank. It does not train on CN-Celeb or establish paper-level numerical reproducibility. See `TESTING.md` for the validation performed for this release.
+See TESTING.md for the current test scope. Passing tests means the software workflow runs; it does not replace training on real data and experimental validation.
 
 ## Attribution
 
-See `THIRD_PARTY_NOTICES.md` and `LICENSE`. This release builds on user-supplied 3D-Speaker/SpeechBrain-derived ECAPA and preprocessing code; attribution is retained. Cite the AFSC manuscript when using the proposed feature method. Research audio must be obtained from its original providers.
+See `THIRD_PARTY_NOTICES.md` and `LICENSE`. This release builds on user-provided 3D-Speaker / SpeechBrain-derived ECAPA and preprocessing code; attribution is retained. Cite the AFSC paper when using the proposed feature method. Research audio must be obtained from its original providers.
+
+`tools/convert_legacy.py` is original code for this project and converts 3D-Speaker-style AFSC + ECAPA checkpoints into this project's format. The converted checkpoint contents remain under their original license. If you use the pretrained weights, make sure you have the right to redistribute them.
+```

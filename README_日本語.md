@@ -41,15 +41,6 @@ python -m pip install -r requirements.txt
 
 GPU ユーザーは対応する CUDA 版をインストールしてください。`requirements.txt` は変更不要です。
 
-## PyCharm で直接実行する
-
-すべての入口スクリプトは、PyCharm で**右クリック → Run** するだけで動作するように、二つの工夫をしています：
-
-1. スクリプト先頭でプロジェクトルートを `sys.path` に追加するので、`from Dataset...`、`from Features...`、`from Model...` がすべて正常にインポートできます；
-2. デフォルト引数はプロジェクトルートからの絶対パスで、PyCharm の working directory に依存しません。
-
-各入口スクリプトには `default_checkpoint()` または `default_paths()` 関数があり、「自分で学習したモデル」と「論文の事前学習モデル」の二つの分岐が書かれています。**現在は自分で学習した分岐がデフォルトで有効です**。切り替えるときは、該当する `return` のコメントを外してください。
-
 ## まずデモを動かす
 
 `Speech_example/` からマニフェストを生成します：

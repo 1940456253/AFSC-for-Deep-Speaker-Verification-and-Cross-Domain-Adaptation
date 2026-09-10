@@ -1,6 +1,6 @@
 # AFSC + ECAPA Part 1 Public Code
 
-**English** | [中文](README.zh.md) | [日本語](README.ja.md)
+**English** | [中文](README_中文.md) | [日本語](README_日本語.md)
 
 
 This project covers the first part of the paper: AFSC features, ECAPA training, embedding extraction, and speaker verification, with MFCC and FBank baselines. Cross-domain adaptation is not included, and neither Res2Net nor X-Vector is included. The code can be retrained and can also load the CN-Celeb2 pretrained model provided with the paper.

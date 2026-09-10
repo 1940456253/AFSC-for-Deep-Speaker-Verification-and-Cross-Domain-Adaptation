@@ -2,7 +2,7 @@
 
 [English](README.md) | **中文** | [日本語](README_日本語.md)
 
-这个项目覆盖论文第一部分的 AFSC 特征、ECAPA 训练、嵌入提取和说话人验证，保留 MFCC、FBank 对照。没有加入跨域适应，也没有加入 Res2Net 或 X-Vector。代码可以重新训练，也支持加载论文提供的 CN-Celeb2 预训练模型。
+这个项目覆盖论文第一部分的 AFSC 特征、ECAPA 训练、嵌入提取和说话人验证，保留 MFCC、FBank 对照。加入了官方 Res2Net 和 X-Vector代码。没有加入跨域适应，代码可以重新训练，也支持加载论文提供的 CN-Celeb2 预训练模型。
 
 项目同时支持两种使用方式：
 

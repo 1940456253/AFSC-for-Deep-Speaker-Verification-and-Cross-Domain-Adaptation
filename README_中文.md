@@ -1,4 +1,4 @@
-# AFSC + ECAPA 公开代码
+# 用于深度说话人验证和跨域自适应的AFSC语音特征 
 
 [English](README.md) | **中文** | [日本語](README_日本語.md)
 
@@ -302,3 +302,26 @@ python -m Evaluation.smoke_test
 `tools/convert_legacy.py` 是本项目原创代码，用于把 3D-Speaker 风格的 AFSC + ECAPA checkpoint 转换成本项目格式。转换后的 checkpoint 内容仍受原始许可约束。使用预训练权重时请确认你有再分发权限。
 
 `Adaptation/` 中的 residual adapter、supervised contrastive loss、target-domain embedding 标准化和固定分数融合均参考论文 3.5 节和作者提供的实验笔记。Colab 上的 SITW 完整实验代码依赖 `speakerlab` 和 Google Drive，本公开仓库未包含。
+
+### 演示数据集
+
+`Speech_example/` 中的演示音频来自 CN-Celeb 数据集（OpenSLR SLR82），用于演示流程，不从原始数据集重新分发。
+
+- 数据集主页：https://openslr.org/82/
+- 许可证：Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)
+- 来源：由清华大学 CSLT（Center for Speech and Language Technologies）发布
+
+CN-Celeb：
+
+```bibtex
+@inproceedings{fan2020cn,
+  title={CN-CELEB: a challenging Chinese speaker recognition dataset},
+  author={Fan, Yue and Kang, JW and Li, LT and Li, KC and Chen, HL and
+          Cheng, ST and Zhang, PY and Zhou, ZY and Cai, YQ and Wang, Dong},
+  booktitle={ICASSP 2020-2020 IEEE International Conference on
+             Acoustics, Speech and Signal Processing (ICASSP)},
+  year={2020}
+}
+```
+
+使用本仓库的演示音频或代码时，请遵守 CC BY-SA 4.0 许可证，并保留上述归属声明。本仓库不分发完整的 CN-Celeb 数据集，仅包含少量演示音频。如需完整数据集，请从 https://openslr.org/82/ 获取。

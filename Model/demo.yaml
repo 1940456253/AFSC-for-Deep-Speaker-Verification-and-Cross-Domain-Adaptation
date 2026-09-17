@@ -7,8 +7,8 @@ channels: [32, 32, 32, 32, 96]
 seed: 1234
 batch_size: 4
 num_workers: 0
-joint_epochs: 8
-frozen_epochs: 2
+joint_epochs: 2
+frozen_epochs: 8
 learning_rate: 0.001
 min_learning_rate: 0.00001
 warmup_epochs: 0

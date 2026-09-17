@@ -1,17 +1,17 @@
-# AFSC + ECAPA 第一部分公开代码
+# AFSC + ECAPA 公开代码
 
 [English](README.md) | **中文** | [日本語](README_日本語.md)
 
-这个项目覆盖论文第一部分的 AFSC 特征、ECAPA 训练、嵌入提取和说话人验证，保留 MFCC、FBank 对照。加入了官方 Res2Net 和 X-Vector代码。没有加入跨域适应，代码可以重新训练，也支持加载论文提供的 CN-Celeb2 预训练模型。
+这个项目覆盖 AFSC 特征、ECAPA 训练、嵌入提取、说话人验证，以及目标域自适应的演示。保留了 MFCC、FBank 对照。加入了官方 Res2Net 和 X-Vector 代码。代码可以重新训练，也支持加载论文提供的 CN-Celeb2 预训练模型。跨域适应部分目前提供轻量级演示，用于验证 residual adapter、target-domain embedding 标准化和固定分数融合的流程。
 
 项目同时支持两种使用方式：
 
 - **自己训练**：从 `Speech_example/` 或你自己的数据集出发，用 `Model/train.py` 训练 AFSC + ECAPA；
 - **加载预训练**：用 `tools/convert_legacy.py` 把论文提供的 `embedding_model.ckpt` + `classifier.ckpt` 转换成本项目的 checkpoint 格式，然后直接提取、评分、对比。
 
-两种方式共用同一套 `Inference/`、`Evaluation/`、`Features/` 脚本。
+两种方式共用同一套 `Inference/`、`Evaluation/`、`Features/` 脚本。跨域适应部分额外使用 `Adaptation/` 目录。
 
-## 五个主要目录
+## 主要目录
 
 | 文件夹 | 主要文件 | 功能 |
 |---|---|---|
@@ -20,6 +20,7 @@
 | Model | ecapa_tdnn.py、system.py、train.py | ECAPA、分类损失、两阶段训练与恢复 |
 | Evaluation | metrics.py、score.py、test_pipeline.py、smoke_test.py | 评分、EER/MinDCF、验证代码 |
 | Inference | extract.py、verify.py | 提取嵌入、比较两段音频 |
+| Adaptation | adapter.py、losses.py、chunking.py、standardize.py、trials.py、sampler.py、dataset.py、embed.py、train.py、demo.py | 目标域自适应：residual adapter、embedding 标准化、固定融合、AFSC gap 更新 |
 
 除此之外还有：
 
@@ -29,7 +30,7 @@
 | `PreTrained/` | 论文提供的预训练 checkpoint（`embedding_model.ckpt` + `classifier.ckpt`）和转换后的 `cn_celeb2_afsc_ecapa.pt` |
 | `tools/` | 辅助脚本，包括 `convert_legacy.py` 和 `inspect_ckpt.py` |
 
-训练代码放在 Model 中，因此不额外增加第六个 Training 目录。所有命令都从项目根目录运行。
+训练代码放在 Model 中，因此不额外增加 Training 目录。所有命令都从项目根目录运行。
 
 ## 安装
 
@@ -41,7 +42,6 @@ python -m pip install -r requirements.txt
 ```
 
 GPU 用户安装对应的 CUDA 版本即可，`requirements.txt` 不用改。
-
 
 ## 先跑通演示
 
@@ -140,6 +140,63 @@ python -m Inference.verify --checkpoint runs/demo/last.pt --enrol Speech_example
 
 不传 `--enrol` / `--test` 时，默认使用 `Speech_example/speech_demo1/` 下前两条音频。`--threshold` 需要在开发集上校准，没有通用默认值。
 
+## 跨域自适应演示
+
+`Adaptation/` 目录把论文 3.5 节的目标域自适应流程，压缩到 `demo_data/` 这个 3 说话人小数据集上跑一遍，用于验证流程。流程包括：
+
+- 冻结预训练 speaker encoder；
+- 在 192 维嵌入后接 residual adapter：`192 → 384 → 192`，ReLU、Dropout 0.40、fc2 零初始化、`alpha` 初始 0.1；
+- 训练损失：supervised contrastive loss + 0.05 × identity MSE；
+- P=8 / K=4 的 PK 采样，每 epoch 100 个 batch；
+- target-domain embedding 逐维标准化，再 L2 归一化；
+- 固定权重 0.5/0.5 的分数融合；
+- AFSC 特征额外支持 target-domain gap 更新（demo 默认 2 epoch）。
+
+依赖已跑通的第一部分产物：
+
+```text
+runs/demo/last.pt
+demo_data/train.csv
+demo_data/eval.csv
+```
+
+运行演示：
+
+```bash
+python -m Adaptation.demo --device cpu
+```
+
+如果只想跑 adapter，不触发 AFSC gap 更新：
+
+```bash
+python -m Adaptation.train --device cpu --gap-epochs 0
+```
+
+完整流程（AFSC 默认 2 epoch gap 更新）：
+
+```bash
+python -m Adaptation.train --device cpu
+```
+
+输出在 `runs/demo_adapt/`（或 `runs/demo_train/`）：
+
+| 文件 | 内容 |
+|---|---|
+| `summary.json` | baseline / standardized / adapter / fusion 四种分数的 EER、MinDCF |
+| `history.json` | adapter 逐 epoch 的 loss / supcon / identity / alpha |
+| `gap_history.json` | 仅当 `--gap-epochs > 0` 时生成，记录 AFSC gap 更新过程 |
+
+`summary.json` 中四个块的含义：
+
+| 字段 | 含义 | 论文对应列 |
+|---|---|---|
+| `baseline` | 未适配，直接用预训练 embedding 的余弦分数 | Before |
+| `standardized` | target-domain 逐维标准化 + L2 后的分数 | Standardized |
+| `adapter` | 只训练 residual adapter 后的分数 | Adapter |
+| `fusion` | `0.5 × adapter + 0.5 × standardized` | Fusion |
+
+演示使用小模型（`Model/demo.yaml`），结果不代表论文数值。真实 SITW 跨域实验需要 `Adaptation/run.py`（尚未整理为公开版本）和完整 SITW Dev / Eval 协议。
+
 ## 加载预训练模型
 
 论文作者提供了 CN-Celeb2 训练的 AFSC + ECAPA 权重：
@@ -206,6 +263,8 @@ trials 每行是「注册音频 ID 测试音频 ID 标签」，同一人为 1，
 
 在训练命令中增加 `--feature fbank` 或 `--feature mfcc` 即可切换基线，同时更换输出目录。提取时会自动从 checkpoint 读取特征类型，不需要重新指定。
 
+跨域自适应部分也接受同样的 CSV 格式。`Adaptation.train` 和 `Adaptation.demo` 通过 `--train-csv` / `--eval-csv` 读取清单，通过 `--checkpoint` 指定预训练模型，通过 `--chunk-seconds` 控制长音频处理（`None` 表示整段处理，30.0 表示 30 秒 chunk）。
+
 ## 配置与原有代码的区别
 
 - `Model/config.yaml`：论文配置，2+8 轮，margin 固定为 0.3，`channels=[1024,1024,1024,1024,3072]`，嵌入维度 192。
@@ -215,6 +274,8 @@ trials 每行是「注册音频 ID 测试音频 ID 标签」，同一人为 1，
 - 新 CSV 默认每条音频一行，在训练时随机裁剪 3 秒。用户主动提供 start/stop 时，会先按该区间读取，再裁剪。原代码「CSV 多行分段但训练忽略区间」的行为没有继续沿用。
 - 新训练器保存完整状态以恢复训练，采用新的 checkpoint 格式。旧的 `embedding_model.ckpt` 不能直接加载，必须先用 `tools/convert_legacy.py` 转换。
 - 评分显式处理相同分数和 ROC 端点，所以在分数相同的情况下可能与旧指标函数有细微差别。
+- `Adaptation/` 的 residual adapter 参考论文 3.5.2 节；identity loss 对 detached base embedding 计算，避免在 AFSC gap 更新时把滤波器拉向 identity 方向。
+- AFSC gap 更新阶段，encoder 保持 `eval()`，只更新 `raw_gaps` 和 adapter；Res2Net 与 X-Vector 在论文中不进行额外的 gap 更新。
 
 ## 训练恢复及查看结果
 
@@ -239,6 +300,5 @@ python -m Evaluation.smoke_test
 见 `THIRD_PARTY_NOTICES.md` 和 `LICENSE`。这个 release 建立在用户提供的 3D-Speaker / SpeechBrain 派生 ECAPA 和预处理代码之上，归属保留。使用论文提出的特征方法时请引用 AFSC 论文。研究用音频必须从原始提供方获取。
 
 `tools/convert_legacy.py` 是本项目原创代码，用于把 3D-Speaker 风格的 AFSC + ECAPA checkpoint 转换成本项目格式。转换后的 checkpoint 内容仍受原始许可约束。使用预训练权重时请确认你有再分发权限。
-```
 
-用户下次上传代码时我再核对文件名引用是否全部同步。你先把这个中文 README 复制替换掉 `README_zh.md`，然后告诉我，我再输出英文和日语的对应版本。
+`Adaptation/` 中的 residual adapter、supervised contrastive loss、target-domain embedding 标准化和固定分数融合均参考论文 3.5 节和作者提供的实验笔记。Colab 上的 SITW 完整实验代码依赖 `speakerlab` 和 Google Drive，本公开仓库未包含。

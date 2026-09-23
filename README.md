@@ -1,49 +1,71 @@
-# AFSC for Deep Speaker Verification and Cross Domain Adaptation
+<a id="top"></a>
+
+# 🎙️ AFSC: Speech Features for Deep Speaker Verification and Cross-Domain Adaptation
 
 **English** | [中文](README_中文.md) | [日本語](README_日本語.md)
 
-This project covers AFSC features, ECAPA training, embedding extraction, speaker verification, and a target-domain adaptation demo. MFCC and FBank baselines are retained. Official Res2Net and X-Vector code is included. The code can be retrained from scratch and also supports loading the CN-Celeb2 pretrained models provided with the paper. The cross-domain adaptation part currently provides a lightweight demo that verifies the residual adapter, target-domain embedding standardization, and fixed score fusion pipeline.
+**Learnable Acoustic Features · Speaker Verification · Target-Domain Adaptation**
 
-The project supports two usage modes:
+This project provides code for training AFSC features and ECAPA-TDNN, extracting embeddings, speaker verification, and cross-domain adaptation, with MFCC and FBank features retained for comparison. Original reference code for Res2Net and X-Vector is also provided for users to integrate as needed.
 
-- **Train your own model**: start from `Speech_example/` or your own dataset and train AFSC + ECAPA with `Model/train.py`.
-- **Load pretrained models**: convert the paper's `embedding_model.ckpt` + `classifier.ckpt` into this project's checkpoint format using `tools/convert_legacy.py`, then extract, score, and compare directly.
+> 📢 **Release Updates**
+>
+> - **Cross-domain experiment code is now public**: Code for SITW target-domain adaptation is available in [`Adaptation/`](Adaptation/) for fine-tuning and comparative experiments.
+> - **Pretrained model is now public**: The **ECAPA + AFSC model trained for 10 epochs on CN-Celeb2** is available for download from this project's [GitHub Releases](../../releases).
 
-Both modes share the same `Inference/`, `Evaluation/`, and `Features/` scripts. The cross-domain adaptation part additionally uses the `Adaptation/` directory.
-
-## Main directories
-
-| Folder | Main files | Purpose |
+| Usage | Entry Point | Purpose |
 |---|---|---|
-| Dataset | data.py, prepare.py, demo.py | Read audio, prepare training manifests, generate demo data from speaker folders |
-| Features | spectrum.py, afsc.py, frontend.py, export.py | Power spectrum and three acoustic features, export learned filters |
-| Model | ecapa_tdnn.py, system.py, train.py | ECAPA, classification loss, two-stage training and resume |
-| Evaluation | metrics.py, score.py, test_pipeline.py, smoke_test.py | Scoring, EER/MinDCF, verification code |
-| Inference | extract.py, verify.py | Extract embeddings, compare two audio files |
-| Adaptation | adapter.py, losses.py, chunking.py, standardize.py, trials.py, sampler.py, dataset.py, embed.py, train.py, demo.py | Target-domain adaptation: residual adapter, embedding standardization, fixed fusion, AFSC gap update |
+| 🏋️ Train from scratch | `Model/train.py` | Train AFSC + ECAPA on example audio or your own dataset |
+| 📦 Load a pretrained model | [Releases](../../releases) · `Inference/` | Extract embeddings, compute scores, and compare two recordings |
+| 🔄 Target-domain adaptation | [`Adaptation/`](Adaptation/) | Fine-tune a pretrained model across domains and compare scores |
 
-In addition:
+Models trained here and pretrained models share the scripts in `Inference/`, `Evaluation/`, and `Features/`; cross-domain adaptation uses `Adaptation/`.
 
-| Folder | Contents |
+### 🧭 Quick Navigation
+
+[Project Structure](#structure) · [Installation](#installation) · [Demo Data](#demo) · [Training and Verification](#training) · [Cross-Domain Adaptation](#adaptation) · [Pretrained Model](#pretrained) · [Your Own Data](#data) · [Configuration](#configuration) · [Resume Training](#resume) · [Tests](#tests) · [Citation and Attribution](#credits)
+
+---
+
+<a id="structure"></a>
+
+## 📂 Project Structure
+
+| Directory | Main Files | Function |
+|---|---|---|
+| Dataset | data.py, prepare.py, demo.py | Read audio, prepare training manifests, and generate demo data from speaker directories |
+| Features | spectrum.py, afsc.py, frontend.py, export.py | Power spectra and three acoustic feature types; export learned filters |
+| Model | ecapa_tdnn.py, system.py, train.py | ECAPA, classification loss, two-stage training, and resumption |
+| Evaluation | metrics.py, score.py, test_pipeline.py, smoke_test.py | Scoring, EER/MinDCF, and validation code |
+| Inference | extract.py, verify.py | Extract embeddings and compare two recordings |
+| Adaptation | adapter.py, losses.py, chunking.py, standardize.py, trials.py, sampler.py, dataset.py, embed.py, train.py, demo.py | Target-domain adaptation: residual adapter, embedding standardization, fixed fusion, and AFSC gap updates |
+
+Additional directories:
+
+| Directory | Contents |
 |---|---|
-| `Speech_example/` | Example audio, one speaker per subfolder, 15 utterances per folder |
-| `PreTrained/` | Pretrained checkpoints provided with the paper (`embedding_model.ckpt` + `classifier.ckpt`) and the converted `cn_celeb2_afsc_ecapa.pt` |
-| `tools/` | Helper scripts, including `convert_legacy.py` and `inspect_ckpt.py` |
+| `Speech_example/` | Example audio: one speaker per subdirectory, with 15 recordings in each |
+| `PreTrained/` | Local storage for pretrained weights downloaded from Releases and the converted `cn_celeb2_afsc_ecapa.pt` |
+| `tools/` | Utilities, including `convert_legacy.py` and `inspect_ckpt.py` |
 
-Training code lives in Model, so no separate Training directory is added. All commands are run from the project root.
+Training code is located in Model, so no separate Training directory is added. Run all commands from the project root.
 
-## Installation
+<a id="installation"></a>
 
-Use Python 3.10–3.12. First install the matching PyTorch and torchaudio 2.5.1, then install requirements.txt. CPU example:
+## 🛠️ Installation
+
+Use Python 3.10–3.12. First install matching PyTorch and torchaudio 2.5.1 packages, then install the dependencies in requirements.txt. CPU example:
 
 ```bash
 python -m pip install torch==2.5.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cpu
 python -m pip install -r requirements.txt
 ```
 
-GPU users can install the corresponding CUDA build; `requirements.txt` does not need to change.
+For GPU use, install the appropriate CUDA build; no changes to `requirements.txt` are needed.
 
-## Run the demo first
+<a id="demo"></a>
+
+## 🚀 Prepare Demo Data
 
 Generate manifests from `Speech_example/`:
 
@@ -60,99 +82,111 @@ Trials: 105 (30 target, 75 nontarget)
 Manifests written to .../demo_data
 ```
 
-Generated files in `demo_data/`:
+Generated files are stored in `demo_data/`:
 
 | File | Contents |
 |---|---|
-| `train.csv` | Training manifest, each line `ID,path,spk` |
-| `eval.csv` | Evaluation manifest, each line `ID,path,spk` |
-| `trials.txt` | Evaluation trials, each line `enrol_id test_id label` |
+| `train.csv` | Training manifest; each row contains `ID,path,spk` |
+| `eval.csv` | Evaluation manifest; each row contains `ID,path,spk` |
+| `trials.txt` | Evaluation trials; each line contains `enrol_id test_id label` |
 
-By default each speaker keeps 5 utterances for evaluation and the rest for training. To change:
+By default, five recordings per speaker are reserved for evaluation and the remainder are used for training. To change this:
 
 ```bash
 python -m Dataset.demo --eval-per-speaker 3
 ```
 
-## Full pipeline for training your own model
+<a id="training"></a>
 
-In PyCharm, right-click and Run the following files in order; or run them from the command line with `python -m ...`.
+## 🏋️ Part 1: Training and Speaker Verification
 
-### 1. Training
+Open the project root in PyCharm, select a Python interpreter with the dependencies installed, and set the run configuration's working directory to the project root. Run the scripts in order using their default demo settings, or execute the commands below from the command line.
+
+### 1. Train
 
 ```bash
 python -m Model.train --config Model/demo.yaml --train-csv demo_data/train.csv --output runs/demo --device cpu
 ```
 
-`Model/demo.yaml` is a CPU-friendly small model; `Model/config.yaml` is the paper configuration (2+8 epochs, `channels=[1024,1024,1024,1024,3072]`, 192-dim embedding) used for formal experiments.
+`Model/demo.yaml` defines a small, CPU-friendly model. `Model/config.yaml` contains the paper's configuration (2+8 epochs, `channels=[1024,1024,1024,1024,3072]`, and 192-dimensional embeddings); use it for full experiments.
 
-Training output is in `runs/demo/`:
+Training outputs are stored in `runs/demo/`:
 
 | File | Contents |
 |---|---|
-| `config.yaml` | Full configuration used for this run |
+| `config.yaml` | Complete configuration used for this training run |
 | `speakers.json` | Speaker → index mapping |
 | `train.jsonl` | Per-epoch loss / accuracy / lr / margin |
-| `epoch_XXX.pt` | Full checkpoint for each epoch |
-| `last.pt` | Copy of the last epoch |
+| `epoch_XXX.pt` | Complete checkpoint for each epoch |
+| `last.pt` | Copy of the final epoch's checkpoint |
 | `frequency_points_XXX.json` | AFSC frequency points for each epoch |
 
-### 2. Extract evaluation embeddings
+### 2. Extract Evaluation Embeddings
 
 ```bash
 python -m Inference.extract --checkpoint runs/demo/last.pt --csv demo_data/eval.csv --output runs/demo/embeddings.npz --device cpu
 ```
 
-Output:
+Outputs:
 
-- `runs/demo/embeddings.npz`: contains `ids` (string array) and `embeddings` (N × D)
-- `runs/demo/embeddings.json`: metadata recording checkpoint, csv, feature, utterances, chunk_seconds
+- `runs/demo/embeddings.npz`: contains `ids` (a string array) and `embeddings` (N × D)
+- `runs/demo/embeddings.json`: metadata recording checkpoint, csv, feature, utterances, and chunk_seconds
 
-### 3. Scoring
+### 3. Score
 
 ```bash
 python -m Evaluation.score --enrol runs/demo/embeddings.npz --trials demo_data/trials.txt --output runs/demo/scores
 ```
 
-Output:
+Outputs:
 
-- `runs/demo/scores/scores.csv`: each trial's enrol_id, test_id, label, score
-- `runs/demo/scores/metrics.json`: EER, MinDCF, trial counts
+- `runs/demo/scores/scores.csv`: enrol_id, test_id, label, and score for each trial
+- `runs/demo/scores/metrics.json`: EER, MinDCF, and the number of trials
 
-EER is reported as a percentage, MinDCF uses the normalized value, and the default target prior is `0.01`.
+EER is reported as a percentage. MinDCF is normalized, with a default target prior of `0.01`.
 
-### 4. Export filters (optional)
+### 4. Export Filters (Optional)
 
 ```bash
 python -m Features.export --checkpoint runs/demo/last.pt --output runs/demo/filters --plot
 ```
 
-Output:
+Outputs:
 
-- `runs/demo/filters/afsc_filters.npz`: contains `bin_points` (82,), `hz` (82,), `filters` (80, 257)
-- `runs/demo/filters/afsc_filters.png` (if `--plot` is given)
+- `runs/demo/filters/afsc_filters.npz`: contains `bin_points` (82,), `hz` (82,), and `filters` (80, 257)
+- `runs/demo/filters/afsc_filters.png` (when `--plot` is specified)
 
-### 5. Compare two audio files (optional)
+### 5. Compare Two Recordings (Optional)
 
 ```bash
 python -m Inference.verify --checkpoint runs/demo/last.pt --enrol Speech_example/speech_demo1/speech-01-001.flac --test Speech_example/speech_demo1/speech-01-002.flac
 ```
 
-If `--enrol` / `--test` are omitted, the first two audio files under `Speech_example/speech_demo1/` are used. `--threshold` must be calibrated on a development set; there is no universal default.
+If `--enrol` / `--test` are omitted, the first two recordings in `Speech_example/speech_demo1/` are used by default. Calibrate `--threshold` on a development set; there is no universal default threshold.
 
-## Cross-domain adaptation demo
+<a id="adaptation"></a>
 
-The `Adaptation/` directory compresses the target-domain adaptation procedure from Section 3.5 of the paper onto the 3-speaker `demo_data/` set to verify the pipeline. The procedure includes:
+## 🔄 Part 2: Cross-Domain Adaptation and Fine-Tuning
+
+**The SITW cross-domain adaptation experiment code is publicly available in [`Adaptation/`](Adaptation/).** Users can fine-tune using the released code, pretrained models, and their own target-domain data, and adjust the number of training epochs, sampling settings, and AFSC gap update strategy.
+
+This part corresponds to Section 3.5 of the paper. The commands below first demonstrate the workflow using the three speakers in `demo_data/`; full experiments should use the complete SITW Dev / Eval splits and the corresponding official trials.
+
+### Method Components
+
+The main settings used in the paper's experiments are:
 
 - Freeze the pretrained speaker encoder;
-- Append a residual adapter after the 192-dim embedding: `192 → 384 → 192`, ReLU, Dropout 0.40, zero-initialized fc2, `alpha` initialized to 0.1;
+- Attach a residual adapter after the paper model's 192-dimensional embedding: `192 → 384 → 192`, with ReLU, Dropout 0.40, zero-initialized fc2, and `alpha` initialized to 0.1;
 - Training loss: supervised contrastive loss + 0.05 × identity MSE;
-- P=8 / K=4 PK sampling, 100 batches per epoch;
-- Target-domain embedding component-wise standardization followed by L2 normalization;
-- Fixed 0.5/0.5 score fusion;
-- AFSC features additionally support target-domain gap updates (default 2 epochs in the demo).
+- PK sampling with P=8 / K=4 and 100 batches per epoch in the paper's experiments; sampling settings for a small demo must match the available number of speakers;
+- Per-dimension standardization of target-domain embeddings, followed by L2 normalization;
+- Score fusion with fixed 0.5/0.5 weights;
+- AFSC features additionally support target-domain gap updates (2 epochs by default in the demo).
 
-It depends on the already-completed Part 1 artifacts:
+### Quick Demo
+
+The following demo uses the outputs from Part 1:
 
 ```text
 runs/demo/last.pt
@@ -166,66 +200,96 @@ Run the demo:
 python -m Adaptation.demo --device cpu
 ```
 
-To train only the adapter without triggering AFSC gap updates:
+To run only the adapter without AFSC gap updates:
 
 ```bash
 python -m Adaptation.train --device cpu --gap-epochs 0
 ```
 
-Full pipeline (AFSC runs 2 epochs of gap update by default):
+Full workflow (2 epochs of AFSC gap updates by default):
 
 ```bash
 python -m Adaptation.train --device cpu
 ```
 
-Output is in `runs/demo_adapt/` (or `runs/demo_train/`):
+Outputs are stored in `runs/demo_adapt/` (or `runs/demo_train/`):
 
 | File | Contents |
 |---|---|
-| `summary.json` | EER and MinDCF for baseline / standardized / adapter / fusion |
-| `history.json` | Per-epoch loss / supcon / identity / alpha of the adapter |
-| `gap_history.json` | Only generated when `--gap-epochs > 0`, records the AFSC gap update process |
+| `summary.json` | EER and MinDCF for baseline / standardized / adapter / fusion scores |
+| `history.json` | Per-epoch adapter loss / supcon / identity / alpha |
+| `gap_history.json` | AFSC gap update history; generated only when `--gap-epochs > 0` |
 
-Meaning of the four blocks in `summary.json`:
+The four sections in `summary.json` mean:
 
-| Field | Meaning | Paper column |
+| Field | Meaning | Corresponding Column in the Paper |
 |---|---|---|
-| `baseline` | Unadapted cosine scores directly from the pretrained embedding | Before |
-| `standardized` | Target-domain component-wise standardization + L2 scores | Standardized |
-| `adapter` | Scores after training the residual adapter | Adapter |
+| `baseline` | Unadapted cosine scores computed directly from pretrained embeddings | Before |
+| `standardized` | Scores after target-domain per-dimension standardization and L2 normalization | Standardized |
+| `adapter` | Scores from the residual adapter branch; when gap updates are enabled, these also reflect front-end adaptation | Adapter |
 | `fusion` | `0.5 × adapter + 0.5 × standardized` | Fusion |
 
-The demo uses a small model (`Model/demo.yaml`) and does not reproduce the paper's numbers. Real SITW cross-domain experiments require `Adaptation/run.py` (not yet packaged for public release) and the full SITW Dev / Eval protocol.
+> 💡 **Demo vs. Full Experiments**
+>
+> The demo uses a small model (`Model/demo.yaml`) and a small amount of audio; its results do not represent the paper's reported values. For full cross-domain experiments, use the CN-Celeb2 pretrained model from Releases and configure SITW data paths, training parameters, and evaluation protocols according to the code in `Adaptation/`.
 
-## Loading the pretrained model
+### Run SITW or Custom Target-Domain Experiments
 
-The paper's authors provide AFSC + ECAPA weights trained on CN-Celeb2:
+1. Download the pretrained weights and prepare a supported checkpoint as described in the next section.
+2. Prepare target-domain training and evaluation manifests, along with trials consistent with the evaluation protocol.
+3. Configure model paths, data paths, and fine-tuning parameters in `Adaptation/`.
+4. Compare EER / MinDCF for unadapted, standardized, adapter, and fused scores.
+
+SITW experiments use Dev data for adaptation and parameter selection, and Eval for final evaluation. Estimate standardization statistics from the target-domain adaptation data. Example data is only for learning how to run the code and cannot replace a formal cross-domain evaluation protocol.
+
+<a id="pretrained"></a>
+
+## 📦 Download and Load the Pretrained Model
+
+### ⬇️ Get the Model
+
+**The ECAPA + AFSC model pretrained for 10 epochs on CN-Celeb2 is publicly available for download from this project's [Releases page](../../releases).**
+
+Open Releases and download the weights or archive from **Assets** under the appropriate release. Extract the archive if needed and place the model files in `PreTrained/` at the project root.
+
+| Item | Description |
+|---|---|
+| Model | ECAPA-TDNN + AFSC |
+| Pretraining dataset | CN-Celeb2 |
+| Training duration | 10 epochs |
+| Embedding dimension | 192 |
+| Download | [This project's GitHub Releases](../../releases) |
+| Local storage | `PreTrained/` |
+
+### Convert Legacy Weights
+
+If you downloaded legacy checkpoints, arrange the files as follows:
 
 ```
 PreTrained/embedding_model.ckpt    # AFSC + ECAPA weights
-PreTrained/classifier.ckpt         # 2793 × 192 classifier head
+PreTrained/classifier.ckpt         # 2793 × 192 classification head
 ```
 
-These are in the legacy format and must first be converted to this project's `format_version: 1` with `tools/convert_legacy.py`:
+First convert the legacy files to this project's `format_version: 1` using `tools/convert_legacy.py`:
 
 ```bash
 python tools/convert_legacy.py
 ```
 
-The conversion script will:
+The conversion script:
 
-1. Rename the `afsc.*` prefix to `frontend.*`;
-2. Rename the `ecapa.*` prefix to `encoder.*`;
-3. Verify that all keys match `SpeakerSystem`;
-4. Write `PreTrained/cn_celeb2_afsc_ecapa.pt` and `PreTrained/cn_celeb2_afsc_ecapa.json`.
+1. Changes the `afsc.*` prefix to `frontend.*`;
+2. Changes the `ecapa.*` prefix to `encoder.*`;
+3. Checks that all keys match `SpeakerSystem`;
+4. Writes `PreTrained/cn_celeb2_afsc_ecapa.pt` and `PreTrained/cn_celeb2_afsc_ecapa.json`.
 
-If you see `All keys matched exactly.`, the conversion succeeded completely.
+The message `All keys matched exactly.` indicates that the weight keys matched successfully.
 
-### Extract and score with the pretrained model
+> 💡 If the download already includes the converted `cn_celeb2_afsc_ecapa.pt`, use it directly without converting again.
 
-To switch, open `Inference/extract.py`, `Evaluation/score.py`, `Features/export.py`, `Inference/verify.py` and comment out section (A) and uncomment section (B) in `default_checkpoint()` (or `default_paths()`).
+### Extract and Score with the Pretrained Model
 
-Then you can use the same commands as the "train your own model" workflow:
+**Command-line usage:** Specify the model and output paths directly through arguments, without changing the scripts' defaults:
 
 ```bash
 python -m Inference.extract --checkpoint PreTrained/cn_celeb2_afsc_ecapa.pt --csv demo_data/eval.csv --output runs/pretrained_eval.npz --device cpu
@@ -233,25 +297,29 @@ python -m Evaluation.score --enrol runs/pretrained_eval.npz --trials demo_data/t
 python -m Features.export --checkpoint PreTrained/cn_celeb2_afsc_ecapa.pt --output runs/pretrained_filters --plot
 ```
 
-### Notes on the pretrained model
+When running directly in PyCharm without arguments, follow the comments in sections (A)/(B) of each script to switch `default_checkpoint()` or `default_paths()`, keeping model, embedding, and output paths consistent.
 
-- The 3 speakers in `Speech_example/` are **not** among the 2793 speakers in CN-Celeb2. The pretrained model has never seen them, so the EER on this demo may be high; this is expected.
-- Meaningful evaluation requires the official CN-Celeb2 or SITW protocols and trial lists.
-- The pretrained model was trained with the AFSC front end, so it can only be used with `feature: afsc`.
-- The speaker mapping stored in the checkpoint is a placeholder (`speaker_00000`…`speaker_02792`) and only affects mapping classification outputs back to real speaker names.
+### Usage Notes
 
-## Using real data
+- EER on a small demo is sensitive to sample size and recording conditions and should not be used to judge the pretrained model's overall performance. Speaker verification inherently targets unseen speakers, so evaluation errors should not be attributed solely to the speakers being absent from training.
+- Meaningful evaluation requires the official CN-Celeb2 or SITW evaluation protocols and trial lists.
+- The pretrained model was trained with an AFSC front end and can only be used with `feature: afsc`.
+- The speaker mapping stored in the checkpoint uses placeholder names (`speaker_00000`…`speaker_02792`); this only affects mapping classification outputs back to actual speaker names.
 
-Prepare 16 kHz audio plus wav.scp and utt2spk for the training set. wav.scp has one line per utterance (`audio_id path`), utt2spk has one line per utterance (`audio_id speaker_id`). Audio files are not copied into the repository.
+<a id="data"></a>
+
+## 🗂️ Use Your Own Dataset
+
+Prepare 16 kHz audio and the training set's wav.scp and utt2spk files. Each wav.scp line contains “audio ID path”; each utt2spk line contains “audio ID speaker ID”. Audio files are not copied into the repository.
 
 ```bash
 python -m Dataset.prepare --wav-scp /data/train/wav.scp --utt2spk /data/train/utt2spk --output /data/train/train.csv
 python -m Model.train --config Model/config.yaml --train-csv /data/train/train.csv --output runs/afsc --device cuda
 ```
 
-Without a GPU you can use `--device cpu`, but training the full model will be very slow. On Windows, if you encounter multiprocessing issues, set `num_workers` to 0 in the YAML.
+Without a GPU, use `--device cpu`, but training the full model will be slow. If multiprocessing causes issues on Windows, set `num_workers` to 0 in the YAML file.
 
-Extracting a test set does not require speaker labels:
+Speaker labels are not required to extract test-set embeddings:
 
 ```bash
 python -m Dataset.prepare --wav-scp /data/eval/wav.scp --output /data/eval/eval.csv
@@ -259,59 +327,67 @@ python -m Inference.extract --checkpoint runs/afsc/last.pt --csv /data/eval/eval
 python -m Evaluation.score --enrol runs/afsc/eval.npz --trials /data/eval/trials --output runs/afsc/scores
 ```
 
-Each line of trials is `enrol_audio_id test_audio_id label`, with 1 for the same speaker and 0 for different speakers. Use splits and trials that match your actual dataset protocol. The code will not guess the CN-Celeb enrollment aggregation method and will not generate a random research test set to substitute for the official protocol.
+Each trials line contains “enrollment audio ID test audio ID label”: 1 for the same speaker and 0 for different speakers. Use splits and trials that follow the actual dataset protocol. The code does not infer CN-Celeb enrollment aggregation rules or generate random research test sets as substitutes for official protocols.
 
-Add `--feature fbank` or `--feature mfcc` to the training command to switch baselines; also change the output directory. Extraction reads the feature type from the checkpoint automatically, so no need to specify it again.
+Add `--feature fbank` or `--feature mfcc` to the training command to switch baselines, and use a different output directory. During extraction, the feature type is read automatically from the checkpoint and does not need to be specified again.
 
-The cross-domain adaptation part also accepts the same CSV format. `Adaptation.train` and `Adaptation.demo` read manifests through `--train-csv` / `--eval-csv`, take a pretrained model through `--checkpoint`, and control long-audio handling with `--chunk-seconds` (`None` for whole-utterance processing, 30.0 for 30-second chunks).
+Cross-domain adaptation accepts the same CSV format. `Adaptation.train` and `Adaptation.demo` read manifests through `--train-csv` / `--eval-csv`, select the pretrained model through `--checkpoint`, and control long-audio processing through `--chunk-seconds` (`None` processes the entire recording; 30.0 uses 30-second chunks).
 
-## Differences from the original code
+<a id="configuration"></a>
 
-- `Model/config.yaml`: paper configuration, 2+8 epochs, margin fixed at 0.3, `channels=[1024,1024,1024,1024,3072]`, embedding dimension 192.
-- `Model/legacy_schedule.yaml`: retains the training schedule options corresponding to the log, 2+10 epochs, margin growing from 0 to 0.3, learning rate reaching its minimum at the end of epoch 10. It can only express the training schedule, not prove correspondence to a specific paper result.
-- `Model/demo.yaml`: reduced model, CPU quick-validation only.
-- AFSC retains the original code's initialization reference array, positive-gap normalization, and filter formula. Its exact boundaries are approximately 20.039–7614.844 Hz, and the first actual output points are also affected by normalization. It has not been quietly replaced with a new "exact 20–7600 Hz initialization".
-- New CSVs default to one row per utterance and randomly crop 3 seconds during training. If a user supplies start/stop, the segment is read first and then cropped. The original behavior of "multiple CSV rows with segments but training ignoring the interval" is not carried over.
-- The new trainer saves full state for resuming and uses the new checkpoint format. The legacy `embedding_model.ckpt` cannot be loaded directly and must first be converted with `tools/convert_legacy.py`.
-- Scoring explicitly handles tied scores and ROC endpoints, so it may differ slightly from the legacy metric function when scores are tied.
-- The `Adaptation/` residual adapter follows Section 3.5.2 of the paper; the identity loss is computed against a detached base embedding so that AFSC gap updates do not pull the filter toward identity.
-- During AFSC gap updates, the encoder stays in `eval()` and only `raw_gaps` and the adapter are updated; Res2Net and X-Vector do not perform additional gap updates in the paper.
+## ⚙️ Configuration and Implementation Notes
 
-## Resuming training and inspecting results
+- `Model/config.yaml`: the paper's configuration, with 2+8 epochs, margin fixed at 0.3, `channels=[1024,1024,1024,1024,3072]`, and 192-dimensional embeddings.
+- `Model/legacy_schedule.yaml`: retains the training schedule option corresponding to the logs: 2+10 epochs, margin increasing from 0 to 0.3, and the learning rate reaching its minimum at the end of epoch 10. It describes a training schedule only and does not establish correspondence to any specific paper result.
+- `Model/demo.yaml`: a reduced model for quick CPU-based checks.
+- AFSC retains the original initialization reference array, positive-gap normalization, and filtering formulas. Its exact boundaries are approximately 20.039–7614.844 Hz, and normalization also affects the first frequency points actually produced. This initialization is preserved rather than resetting it to exactly 20–7600 Hz.
+- The new CSV format uses one row per recording by default, with random 3-second cropping during training. If start/stop values are explicitly provided, the specified interval is read before cropping. The old behavior of splitting recordings across CSV rows while ignoring those intervals during training is not retained.
+- The new trainer saves the full state for resuming training and uses a new checkpoint format. Legacy `embedding_model.ckpt` files cannot be loaded directly and must first be converted with `tools/convert_legacy.py`.
+- Scoring explicitly handles tied scores and ROC endpoints, so results may differ slightly from the old metric functions when scores are tied.
+- The residual adapter in `Adaptation/` follows Section 3.5.2 of the paper. Identity loss uses a detached base embedding as its reference target, preventing gradients from passing through the reference-target branch.
+- During AFSC gap updates, the encoder stays in `eval()` mode; only `raw_gaps` and the adapter are updated. Res2Net and X-Vector do not receive additional gap updates in the paper.
+
+<a id="resume"></a>
+
+## 💾 Resume Training and Inspect Results
 
 ```bash
 python -m Model.train --config Model/config.yaml --train-csv /data/train/train.csv --output runs/afsc --resume runs/afsc/last.pt --device cuda
 python -m Features.export --checkpoint runs/afsc/last.pt --output runs/afsc/filters --plot
 ```
 
-Training output includes per-epoch logs, configuration, speaker indices, full checkpoints, and frequency points. Resuming goes to the next epoch; mid-epoch resume is not supported. Full checkpoints contain data manifest paths, which should be inspected before releasing models publicly.
+Training outputs include per-epoch logs, configuration, speaker indices, complete checkpoints, and frequency points. Training resumes at the next epoch; mid-epoch resumption is not supported. Full checkpoints contain data manifest paths, which should be reviewed before releasing a model.
 
-## Checks
+<a id="tests"></a>
+
+## 🧪 Software Tests
 
 ```bash
 python -m unittest Evaluation.test_pipeline -v
 python -m Evaluation.smoke_test
 ```
 
-See TESTING.md for the current test scope. Passing tests means the software pipeline runs; it does not replace training and experimental validation on real datasets.
+See TESTING.md for the current test coverage. Passing tests indicates that the software workflow runs, but does not replace training and experimental validation on real datasets.
 
-## Attribution
+<a id="credits"></a>
 
-See `THIRD_PARTY_NOTICES.md` and `LICENSE`. This release is built on the user-provided 3D-Speaker / SpeechBrain-derived ECAPA and preprocessing code, with attribution retained. When using the proposed feature method, please cite the AFSC paper. Research audio must be obtained from the original providers.
+## 📚 Citation and Attribution
 
-`tools/convert_legacy.py` is original code in this project, used to convert 3D-Speaker-style AFSC + ECAPA checkpoints into this project's format. The converted checkpoint contents remain subject to the original licenses. Confirm you have redistribution rights before using pretrained weights.
+See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and [`LICENSE`](LICENSE) for code sources and licensing. This project is organized around ECAPA and preprocessing code derived from 3D-Speaker / SpeechBrain, with the relevant attribution retained. Please cite the AFSC paper when using the proposed feature method. Audio for research must be obtained from its original provider.
 
-The residual adapter, supervised contrastive loss, target-domain embedding standardization, and fixed score fusion in `Adaptation/` follow Section 3.5 of the paper and the author-provided experimental notes. The full SITW experiment code on Colab depends on `speakerlab` and Google Drive and is not included in this public repository.
+`tools/convert_legacy.py` is original code developed for this project to convert 3D-Speaker-style AFSC + ECAPA checkpoints to this project's format. Converted checkpoint contents remain subject to their original licenses. When using pretrained weights, ensure that you have redistribution rights.
 
-### Demo dataset
+The residual adapter, supervised contrastive loss, target-domain embedding standardization, and fixed score fusion in `Adaptation/` follow Section 3.5 of the paper and the experimental notes provided by the author. The corresponding SITW cross-domain adaptation experiment code is publicly available in `Adaptation/`; use it to configure your data and run fine-tuning experiments.
 
-The demo audio in `Speech_example/` comes from the CN-Celeb dataset (OpenSLR SLR82), used to demonstrate the pipeline; the full dataset is not redistributed.
+### Demo Dataset
+
+`Speech_example/` contains a small number of recordings from CN-Celeb (OpenSLR SLR82), used only to demonstrate the workflow; this repository does not include the full dataset.
 
 - Dataset homepage: https://openslr.org/82/
 - License: Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)
-- Source: released by the Center for Speech and Language Technologies (CSLT), Tsinghua University
+- Source: released by CSLT (Center for Speech and Language Technologies), Tsinghua University
 
-CN-Celeb citation:
+CN-Celeb:
 
 ```bibtex
 @inproceedings{fan2020cn,
@@ -324,4 +400,9 @@ CN-Celeb citation:
 }
 ```
 
-When using the demo audio or code in this repository, please comply with CC BY-SA 4.0 and retain the attribution above. This repository does not distribute the full CN-Celeb dataset, only a small number of demo audio files. For the full dataset, obtain it from https://openslr.org/82/.
+When using the example audio above, comply with its CC BY-SA 4.0 license and retain the attribution. For code licensing, see this repository's `LICENSE` and `THIRD_PARTY_NOTICES.md`. This repository does not distribute the complete CN-Celeb dataset, only a small amount of example audio. Obtain the full dataset from https://openslr.org/82/.
+
+
+---
+
+[⬆️ Back to Top](#top)
